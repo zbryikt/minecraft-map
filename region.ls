@@ -11,8 +11,8 @@ region = do
     (data) <~ read-file(filename).then
     r = {chunks: {}, data}
     Promise.all(
-      #[{x,z} for x from 0 to 31 for z from 0 to 31].map( ({x,z}) ~>
-      [{x,z} for x from 0 to 0 for z from 0 to 0].map( ({x,z}) ~>
+      #[{x,z} for x from 0 to 0 for z from 0 to 0].map( ({x,z}) ~>
+      [{x,z} for x from 0 to 31 for z from 0 to 31].map( ({x,z}) ~>
         offset = 4 * (z * 32 + x)
         block-count = b2v(data, offset + 3, 1)
         timestamp = b2v(data, offset + 4096, 4)
@@ -28,12 +28,12 @@ region = do
     ).then -> r
   write: (filename, r) -> 
     console.log filename
-    #[{x,z} for x from 0 to 31 for z from 0 to 31].map ( ({x,z}) ~>
-    [{x,z} for x from 0 to 0 for z from 0 to 0].map ( ({x,z}) ~>
+    [{x,z} for x from 0 to 31 for z from 0 to 31].map ( ({x,z}) ~>
       chunk = r.chunks[x][z]
       if !chunk => return
+      if chunk.block-count =>
       (zbuf) <- @encode-chunk chunk .then
-      #chunk.buffer = zbuf
+      if zbuf => chunk.buffer = zbuf
     )
 
   parse-chunk: (chunk) ->
@@ -43,8 +43,8 @@ region = do
   encode-chunk: (chunk) ->
     if chunk.block-count != 0 => 
       rawbuf = nbt.encode chunk.data
-    new Promise(->).then ->
-    #deflate rawuf
+      return deflate rawbuf
+    new Promise(->).then -> null
 
 
 

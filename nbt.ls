@@ -1,5 +1,5 @@
 require! <[fs zlib]>
-require! './util': {b2v,b2u,u2b,makebuf}
+require! './util': {b2v,b2u,u2b,b2i64,makebuf}
 
 nbt = do
   traverse: (chunk) -> for k,v of chunk.data => @_traverse(k, v, 0)
@@ -18,17 +18,19 @@ nbt = do
     
   encode: (data) ->
     size = [@size(k,v) for k,v of data].reduce(((a,b)->a+b),0)
-    console.log "estimate size: #size"
     buf = new Buffer(size)
     offset = 0
     for k,v of data =>
-      console.log ">>", offset
       delta = @_encode k, v, buf, offset
       offset += delta
+    buf[offset] = 0
+    # TODO: better copy method
+    nbuf = new Buffer(offset)
+    for i from 0 til offset => nbuf[i] = buf[i]
+    nbuf
   _encode: (name, {type,value}, buf, offset, tag = true) ->
     delta = 0 
     if tag => delta = @encode-tag name, {type, value}, buf, offset
-    # 寫到這邊, 已經把 tag 寫入 buf, 再來要寫入 payload
     offset += delta
     if type == 0 => return delta
     if type == 1 => 
@@ -41,8 +43,8 @@ nbt = do
       buf.writeInt32BE value, offset
       return delta + 4
     if type == 4 => 
-      buf.writeInt32BE value .>>. 32, offset
-      buf.writeInt32BE value .&. 0xffff, offset + 4
+      buf.writeUInt32BE value.0, offset
+      buf.writeUInt32BE value.1, offset + 4
       return delta + 8
     if type == 5 => 
       buf.writeFloatBE value, offset
@@ -71,14 +73,13 @@ nbt = do
       return delta + delta2 + 1
     if type == 11 =>
       buf.writeInt32BE value.length, offset
-      for i from 0 til value.length => buf.writeInt32BE value[i], offset + (i * 4)
+      for i from 0 til value.length => buf.writeInt32BE value[i], offset + (i * 4) + 4
       return delta + 4 + value.length * 4
     # should not be here
     return 0
 
 
   encode-tag: (name, {type,value}, buf, offset) ->
-    console.log buf.length, offset, type
     buf.writeUInt8 type, offset
     if type == 0 => return 1
     buf.writeUInt16BE name.length, offset + 1
@@ -126,17 +127,11 @@ nbt = do
       return switch tag.type
         | 0 => [0, 0]
         | 1 => [1, data[offset]]
-        #| 2 => [2, b2v(data, offset, 2)]
-        #| 3 => [4, b2v(data, offset, 4)]
-        #| 4 => [8, b2v(data, offset, 8)]
-        #| 5 => [4, b2v(data, offset, 4)] # todo: implement arrat -> float
-        #| 6 => [8, b2v(data, offset, 8)] # todo: implement arrat -> double
-
-        | 2 => [2, data.readInt16BE(offset)] #b2v(data, offset, 2)]
-        | 3 => [4, data.readInt32BE(offset)] #b2v(data, offset, 4)]
-        | 4 => [8, (data.readInt32BE(offset) .<<. 32 ) + data.readInt32BE(offset + 4)] #b2v(data, offset, 8)]
-        | 5 => [4, data.readFloatBE(offset)] #b2v(data, offset, 4)] # todo: implement arrat -> float
-        | 6 => [8, data.readDoubleBE(offset)] #b2v(data, offset, 8)] # todo: implement arrat -> double
+        | 2 => [2, data.readInt16BE(offset)]
+        | 3 => [4, data.readInt32BE(offset)]
+        | 4 => [8, [data.readUInt32BE(offset), data.readUInt32BE(offset + 4)]]
+        | 5 => [4, data.readFloatBE(offset)]
+        | 6 => [8, data.readDoubleBE(offset)]
 
     if tag.type == 7 =>
       len = b2v(data, offset, 4)
