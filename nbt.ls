@@ -1,7 +1,30 @@
 require! <[fs zlib]>
-require! './util': {b2v,unicode,makebuf}
+require! './util': {b2v,b2u,u2b,makebuf}
 
 nbt = do
+  encode: (data) ->
+    @_encode data
+  _encode: (data) ->
+    console.log data
+
+  size: (data) ->
+    type = data.type
+    if type < 7 => return switch type
+      | 0 => 0
+      | 1 => 1
+      | 2 => 2
+      | 3 => 4
+      | 4 => 8
+      | 5 => 4
+      | 6 => 8
+    if type == 7 => return 4 + data.value.length
+    if type == 8 => return 2 + data.value
+    if type == 9 => return 1 + 4 + 
+
+
+    if type == 10 =>
+      return [@size data.value[name] for name of data.value].reduce(((a,b)->a+b),0) + 1 # + 1 for type 0
+
   parse: (data, offset = 0) ->
     ret = @compound data, offset, data.length
     return ret.1
@@ -10,7 +33,7 @@ nbt = do
     type = data[offset]
     if type == 0 => return [1, {type, name: ""}]
     length = b2v(data, offset + 1, 2)
-    name = unicode(data, offset + 3, length)
+    name = b2u(data, offset + 3, length)
     [1 + 2 + length, {type, name}]
 
   compound: (data, offset, limit = 0) ->
@@ -23,7 +46,7 @@ nbt = do
       if t.type == 0 => return [delta, ret]
       [d2, v] = @data data, offset + delta, t
       delta += d2
-      ret[t.name] = v
+      ret[t.name] = {type: t.type, value: v}
 
 
   data: (data, offset, tag) ->
@@ -43,7 +66,7 @@ nbt = do
       return [len + 4, ret]
     if tag.type == 8 =>
       len = b2v(data, offset, 2)
-      ret = unicode(data, offset + 2, len)
+      ret = b2u(data, offset + 2, len)
       return [len + 2, ret]
     if tag.type == 9 =>
       tagid = b2v(data, offset, 1)
