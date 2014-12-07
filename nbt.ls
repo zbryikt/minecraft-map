@@ -2,28 +2,96 @@ require! <[fs zlib]>
 require! './util': {b2v,b2u,u2b,makebuf}
 
 nbt = do
+  traverse: (chunk) -> for k,v of chunk.data => @_traverse(k, v, 0)
+  _traverse: (name, v, lv) ->
+    str = ""
+    if v.type < 7 => str = v.value
+    else if v.type == 7  => str = "Byte Array (#{v.value.length})"
+    else if v.type == 8  => str = "[#{v.value}]"
+    else if v.type == 9  => 
+      str = "List (" + (if v.value.length => "Type #{v.subtype} x #{v.value.length}" else "empty") + ")" 
+    else if v.type == 11 => str = "Int Array  (#{v.value.length})"
+    console.log "#{'  ' * lv}#{' ' * ( if v.type>9 => 0 else 1)}#{v.type} [#name]#{' ' * (20 - name.length)}#str"
+    if v.type == 9 and v.value.length > 0 and v.value.0.type == 10 => 
+      @_traverse("#{name}[0]", v.value.0, lv + 1)
+    else if v.type == 10 => for k,v of v.value => @_traverse(k, v, lv + 1)
+    
   encode: (data) ->
-    @_encode data
-  _encode: (data) ->
-    console.log data
-
-  size: (data) ->
-    type = data.type
-    if type < 7 => return switch type
-      | 0 => 0
-      | 1 => 1
-      | 2 => 2
-      | 3 => 4
-      | 4 => 8
-      | 5 => 4
-      | 6 => 8
-    if type == 7 => return 4 + data.value.length
-    if type == 8 => return 2 + data.value
-    if type == 9 => return 1 + 4 + 
-
-
+    size = [@size(k,v) for k,v of data].reduce(((a,b)->a+b),0)
+    console.log "estimate size: #size"
+    buf = new Buffer(size)
+    offset = 0
+    for k,v of data =>
+      delta = @_encode k, v, buf, offset
+      offset += delta
+  _encode: (name, {type,value}, buf, offset, tag = true) ->
+    delta = 0 
+    if tag => delta = @encode-tag name, {type, value}, buf, offset
+    # 寫到這邊, 已經把 tag 寫入 buf, 再來要寫入 payload
+    offset += delta
+    if type == 0 => return delta
+    if type == 1 => 
+      buf.writeInt8BE value, offset
+      return delta + 1
+    if type == 2 => 
+      buf.writeInt16BE value, offset
+      return delta + 2
+    if type == 3 =>
+      buf.writeInt32BE value, offset
+      return delta + 4
+    if type == 4 => 
+      buf.writeInt32BE value >> 32, offset
+      buf.writeInt32BE value .&. 0xffff, offsete + 4
+      return delta + 8
+    if type == 5 => 
+      buf.writeFloatBE value, offset
+      return delta + 4
+    if type == 6 => 
+      buf.writeDoubleBE value, offset
+      return delta + 8
+    if type == 7 =>
+      buf.writeInt32BE value.length, offset
+      for i from 0 til value.length => buf[offset + 4 + i] = value[i]
+      return delta + 4 + value.length
+    if type == 8 => 
+      len = buf.write value, offset, value.length, 'utf-8'
+      return delta + len
+    if type == 9 =>
+      if value.length == 0 => buf.writeInt8 0, offset else buf.writeInt8 value.0.type, offset
+      buf.writeInt32BE value.length, offset + 1
+      delta2 = (for item in value => @_encode null, item, buf, offset + 5, false).reduce(((a,b)->a+b),0)
+      return delta + 1 + 4 + delta2
     if type == 10 =>
-      return [@size data.value[name] for name of data.value].reduce(((a,b)->a+b),0) + 1 # + 1 for type 0
+      delta2 = (for k,v of value => @_encode k, v, buf, offset).reduce(((a,b)->a+b),0)
+      buf.writeInt8 0, offset + delta2
+      return delta + delta2 + 1
+    if type == 11 =>
+      buf.writeInt32BE value.length, offset
+      for i from 0 til value.length => buf.writeInt32BE value[i], offset + (i * 4)
+      return delta + 4 + value.length * 4
+    # should not be here
+    return 0
+
+
+  encode-tag: (name, {type,value}, buf, offset) ->
+    console.log buf.length, offset,
+    buf.writeUInt8 value, offset
+    if type == 0 => return
+    buf.writeUInt16 name.length, offset + 1
+    delta = buf.write name, offset + 3, name.length, 'utf-8'
+    delta + 3
+
+  size: (name, {type, value}) ->
+    len = if type < 7 => [0 1 2 4 8 4 8][type]
+      else if type == 7 => 4 + value.length
+      else if type == 8 => 2 + u2b(value).length
+      else if type == 9 => 1 + 4 + [@size(null, v) for v in value].reduce(((a,b)->a+b),0)
+      else if type == 10 =>
+        [3 + @size n, value[n] for n of value].reduce(((a,b)->a+b),0) + 1 # + 1 for type 0
+      else if type == 11 => 4 + 4 * value.length
+      else 0
+    if name!=null => len += ( 3 + u2b(name).length )
+    return len
 
   parse: (data, offset = 0) ->
     ret = @compound data, offset, data.length
@@ -54,11 +122,17 @@ nbt = do
       return switch tag.type
         | 0 => [0, 0]
         | 1 => [1, data[offset]]
-        | 2 => [2, b2v(data, offset, 2)]
-        | 3 => [4, b2v(data, offset, 4)]
-        | 4 => [8, b2v(data, offset, 8)]
-        | 5 => [4, b2v(data, offset, 4)] # todo: implement arrat -> float
-        | 6 => [8, b2v(data, offset, 8)] # todo: implement arrat -> double
+        #| 2 => [2, b2v(data, offset, 2)]
+        #| 3 => [4, b2v(data, offset, 4)]
+        #| 4 => [8, b2v(data, offset, 8)]
+        #| 5 => [4, b2v(data, offset, 4)] # todo: implement arrat -> float
+        #| 6 => [8, b2v(data, offset, 8)] # todo: implement arrat -> double
+
+        | 2 => [2, data.readInt16BE(offset)] #b2v(data, offset, 2)]
+        | 3 => [4, data.readInt32BE(offset)] #b2v(data, offset, 4)]
+        | 4 => [8, (data.readInt32BE(offset) .<<. 32 ) + data.readInt32BE(offset + 4)] #b2v(data, offset, 8)]
+        | 5 => [4, data.readFloatBE(offset)] #b2v(data, offset, 4)] # todo: implement arrat -> float
+        | 6 => [8, data.readDoubleBE(offset)] #b2v(data, offset, 8)] # todo: implement arrat -> double
 
     if tag.type == 7 =>
       len = b2v(data, offset, 4)
@@ -74,10 +148,10 @@ nbt = do
       ret = []
       ptr = 5
       for i from 0 til len =>
-        [delta, value] = @data data, offset + ptr, {type: tagid}
-        ret ++= [value]
+        [delta, value, subtype] = @data data, offset + ptr, {type: tagid}
+        ret ++= [{type: tagid, value}]
         ptr += delta
-      return [ptr, ret]
+      return [ptr, ret, tagid]
     if tag.type == 10 =>
       return @compound(data, offset)
     if tag.type == 11 =>

@@ -1,4 +1,4 @@
-require! <[fs path ./region]>
+require! <[fs path ./region ./nbt]>
 require! bluebird: Promise
 
 readdir = Promise.promisify fs.readdir
@@ -21,5 +21,7 @@ map = do
 
 #(regions) <- map.read "/Users/tkirby/Library/Application Support/minecraft/saves/FORDEV" .then
 (regions) <- map.read "/Users/tkirby/workspace/zbryikt/minecraft" .then
-console.log regions[0][0].chunks[0][0]
+#console.log regions[0][0].chunks[0][0]
+#nbt.traverse regions[0][0].chunks[0][0]
 map.write "/Users/tkirby/workspace/zbryikt/minecraft", regions
+#
