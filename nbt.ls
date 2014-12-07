@@ -22,6 +22,7 @@ nbt = do
     buf = new Buffer(size)
     offset = 0
     for k,v of data =>
+      console.log ">>", offset
       delta = @_encode k, v, buf, offset
       offset += delta
   _encode: (name, {type,value}, buf, offset, tag = true) ->
@@ -31,7 +32,7 @@ nbt = do
     offset += delta
     if type == 0 => return delta
     if type == 1 => 
-      buf.writeInt8BE value, offset
+      buf.writeInt8 value, offset
       return delta + 1
     if type == 2 => 
       buf.writeInt16BE value, offset
@@ -40,8 +41,8 @@ nbt = do
       buf.writeInt32BE value, offset
       return delta + 4
     if type == 4 => 
-      buf.writeInt32BE value >> 32, offset
-      buf.writeInt32BE value .&. 0xffff, offsete + 4
+      buf.writeInt32BE value .>>. 32, offset
+      buf.writeInt32BE value .&. 0xffff, offset + 4
       return delta + 8
     if type == 5 => 
       buf.writeFloatBE value, offset
@@ -59,10 +60,13 @@ nbt = do
     if type == 9 =>
       if value.length == 0 => buf.writeInt8 0, offset else buf.writeInt8 value.0.type, offset
       buf.writeInt32BE value.length, offset + 1
-      delta2 = (for item in value => @_encode null, item, buf, offset + 5, false).reduce(((a,b)->a+b),0)
+      delta2 = 0
+      for item in value =>
+        delta2 += @_encode null, item, buf, offset + 5 + delta2, false
       return delta + 1 + 4 + delta2
     if type == 10 =>
-      delta2 = (for k,v of value => @_encode k, v, buf, offset).reduce(((a,b)->a+b),0)
+      delta2 = 0
+      for k,v of value => delta2 += @_encode k, v, buf, offset + delta2
       buf.writeInt8 0, offset + delta2
       return delta + delta2 + 1
     if type == 11 =>
@@ -74,10 +78,10 @@ nbt = do
 
 
   encode-tag: (name, {type,value}, buf, offset) ->
-    console.log buf.length, offset,
-    buf.writeUInt8 value, offset
-    if type == 0 => return
-    buf.writeUInt16 name.length, offset + 1
+    console.log buf.length, offset, type
+    buf.writeUInt8 type, offset
+    if type == 0 => return 1
+    buf.writeUInt16BE name.length, offset + 1
     delta = buf.write name, offset + 3, name.length, 'utf-8'
     delta + 3
 
