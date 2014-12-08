@@ -11,7 +11,6 @@ region = do
     (data) <~ read-file(filename).then
     r = {chunks: {}, data}
     Promise.all(
-      #[{x,z} for x from 0 to 0 for z from 0 to 0].map( ({x,z}) ~>
       [{x,z} for x from 0 to 31 for z from 0 to 31].map( ({x,z}) ~>
         offset = 4 * (z * 32 + x)
         block-count = b2v(data, offset + 3, 1)
@@ -27,14 +26,17 @@ region = do
       ).filter -> it
     ).then -> r
   write: (filename, r) -> 
-    console.log filename
-    [{x,z} for x from 0 to 31 for z from 0 to 31].map ( ({x,z}) ~>
-      chunk = r.chunks[x][z]
-      if !chunk => return
-      if chunk.block-count =>
-      (zbuf) <- @encode-chunk chunk .then
-      if zbuf => chunk.buffer = zbuf
-    )
+    <- Promise.all(
+      [{x,z} for x from 0 to 31 for z from 0 to 31].map ( ({x,z}) ~>
+        chunk = r.chunks[x][z]
+        if !chunk => return
+        if chunk.block-count =>
+        (zbuf) <- @encode-chunk chunk .then
+        if zbuf => chunk.buffer = zbuf
+      )
+    ).then
+    console.log \ok
+
 
   parse-chunk: (chunk) ->
     (inflated-buf) <- inflate chunk.buffer .then
@@ -45,7 +47,5 @@ region = do
       rawbuf = nbt.encode chunk.data
       return deflate rawbuf
     new Promise(->).then -> null
-
-
 
 module.exports = region
