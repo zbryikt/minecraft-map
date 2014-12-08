@@ -16,10 +16,15 @@ b2v = (data, base, len, ret = 0) ->
   for i from 0 til len => ret = ret * 256 + data[base + i]
   ret
 
+v2b = (data, base, len, value = 0) ->
+  for i from len - 1 to 0 by -1 =>
+    data[base + i] = value % 256
+    value = value .>>. 8
+
 b2i64 = (data, base) ->
   ret = 0
   for i from 0 til 8 => ret = ret * 256 + data[base + i]
   if data[base] .&. 0x80 =>  ~(ret - 1) else ret
 
 i642b = ->
-module.exports = {b2u,u2b,makebuf,b2v, b2i64, i642b}
+module.exports = {b2u,u2b,makebuf,b2v, b2i64, i642b, v2b}

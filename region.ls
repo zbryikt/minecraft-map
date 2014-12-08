@@ -1,6 +1,6 @@
 require! <[fs zlib bluebird ./nbt]>
 require! bluebird: Promise
-require! './util': {b2v,b2u,makebuf}
+require! './util': {v2b, b2v,b2u,makebuf}
 
 read-file = Promise.promisify fs.read-file
 inflate = Promise.promisify zlib.inflate
@@ -35,8 +35,23 @@ region = do
         if zbuf => chunk.buffer = zbuf
       )
     ).then
-    console.log \ok
-
+    region-len = 8192
+    for x from 0 to 31 => for z from 0 to 31 =>
+      chunklen = r.chunks[x][z].buffer.length + 1
+      sector-count = parseInt(Math.ceil((chunklen + 4) / 4096))
+      region-len += (sector-count * 4096)
+      r.chunks[x][z] <<< {length: chunklen, sector-count}
+    region-buf = new Buffer(region-len)
+    sector-offset = 2
+    for x from 0 to 31 => for z from 0 to 31 =>
+      chunk = r.chunks[x][z]
+      base = 4 * ( z * 32 + x )
+      v2b region-buf, base, 3, sector-offset
+      region-buf[base + 3] = chunk.sector-count 
+      v2b regions-buf, 4096 + base, 4, chunk.timestamp
+      chunk.buffer.copy region-buf, sector-offset * 4096, 0
+      sector-offset += chunk.sector-count
+    fs.write-file-sync filename, region-buf
 
   parse-chunk: (chunk) ->
     (inflated-buf) <- inflate chunk.buffer .then
