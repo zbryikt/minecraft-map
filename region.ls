@@ -53,7 +53,7 @@ region = do
         v2b region-buf, 4096 + base, 4, chunk.timestamp
         if chunk.block-count =>
           region-buf.writeInt32BE chunk.length, sector-offset * 4096
-          region-buf.writeInt32BE 2, sector-offset * 4096 + 4
+          region-buf.writeInt8 2, sector-offset * 4096 + 4
           chunk.buffer.copy region-buf, sector-offset * 4096 + 5, 0
         sector-offset += chunk.sector-count
       fs.write-file-sync filename, region-buf
