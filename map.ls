@@ -21,6 +21,21 @@ map = do
       region.write path.join(mappath, \region, "r.#{r.x}.#{r.z}.mca"), r
     .then -> console.log \done
 
+/*
 #(regions) <- map.read "/Users/tkirby/Library/Application Support/minecraft/saves/FORDEV" .then
 (regions) <- map.read "/Users/tkirby/workspace/zbryikt/minecraft" .then
-map.write "/Users/tkirby/workspace/zbryikt/minecraft2", regions
+
+sections = regions[0][0].chunks[0][0].data[""]value.Level.value.Sections.value
+[x,y,z] = [0,0,0]
+for s in sections =>
+  for y from 0 to 15 => for x from 0 to 15 => for z from 0 to 15 => s.value.Blocks[y*256 + z*16 + x] = 89
+console.log "saving..."
+<- map.write "/Users/tkirby/workspace/zbryikt/minecraft/out", regions .then
+console.log "try read..."
+(regions) <- map.read "/Users/tkirby/workspace/zbryikt/minecraft/out"
+console.log "traversing..."
+chunk = regions[0][0].chunks[0][0]
+nbt.traverse chunk
+*/
+
+module.exports = map

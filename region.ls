@@ -48,10 +48,13 @@ region = do
       for x from 0 to 31 => for z from 0 to 31 =>
         chunk = r.chunks[x][z]
         base = 4 * ( z * 32 + x )
-        v2b region-buf, base, 3, sector-offset
+        v2b region-buf, base, 3, (if chunk.block-count==0 => 0 else sector-offset)
         region-buf[base + 3] = chunk.sector-count 
         v2b region-buf, 4096 + base, 4, chunk.timestamp
-        if chunk.block-count => chunk.buffer.copy region-buf, sector-offset * 4096, 0
+        if chunk.block-count =>
+          region-buf.writeInt32BE chunk.length, sector-offset * 4096
+          region-buf.writeInt32BE 2, sector-offset * 4096 + 4
+          chunk.buffer.copy region-buf, sector-offset * 4096 + 5, 0
         sector-offset += chunk.sector-count
       fs.write-file-sync filename, region-buf
 

@@ -9,7 +9,7 @@ nbt = do
     else if v.type == 7  => str = "Byte Array (#{v.value.length})"
     else if v.type == 8  => str = "[#{v.value}]"
     else if v.type == 9  => 
-      str = "List (" + (if v.value.length => "Type #{v.subtype} x #{v.value.length}" else "empty") + ")" 
+      str = "List (" + (if v.value.length => "Type #{v.value.0.type} x #{v.value.length}" else "empty") + ")" 
     else if v.type == 11 => str = "Int Array  (#{v.value.length})"
     console.log "#{'  ' * lv}#{' ' * ( if v.type>9 => 0 else 1)}#{v.type} [#name]#{' ' * (20 - name.length)}#str"
     if v.type == 9 and v.value.length > 0 and v.value.0.type == 10 => 
@@ -57,8 +57,10 @@ nbt = do
       for i from 0 til value.length => buf[offset + 4 + i] = value[i]
       return delta + 4 + value.length
     if type == 8 => 
-      len = buf.write value, offset, value.length, 'utf-8'
-      return delta + len
+      len = buf.write value, offset + 2, value.length, 'utf-8'
+      #if name=='Name' => console.log "write: #value (#len bytes)"
+      buf.writeInt16BE len, offset
+      return delta + len + 2
     if type == 9 =>
       if value.length == 0 => buf.writeInt8 0, offset else buf.writeInt8 value.0.type, offset
       buf.writeInt32BE value.length, offset + 1
@@ -107,6 +109,7 @@ nbt = do
     if type == 0 => return [1, {type, name: ""}]
     length = b2v(data, offset + 1, 2)
     name = b2u(data, offset + 3, length)
+    #console.log length, type,name
     [1 + 2 + length, {type, name}]
 
   compound: (data, offset, limit = 0) ->
@@ -138,8 +141,10 @@ nbt = do
       ret = makebuf(data, offset + 4, len)
       return [len + 4, ret]
     if tag.type == 8 =>
+      #console.log [data[offset + i].toString(16) for i from -10 to 3].join "-"
       len = b2v(data, offset, 2)
       ret = b2u(data, offset + 2, len)
+      #console.log len, ret, ret
       return [len + 2, ret]
     if tag.type == 9 =>
       tagid = b2v(data, offset, 1)
@@ -159,6 +164,8 @@ nbt = do
       for i from 0 til len =>
         ret[i] = b2v(data, offset + 4 + i * 4, 4)
       return [len * 4 + 4, ret]
+    #console.log "error! type: ", tag.type
+
 
 #block in a chk:
 # Y2 = parseInt(y / 16) => find section with Y = Y2
