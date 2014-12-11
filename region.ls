@@ -7,7 +7,7 @@ inflate = Promise.promisify zlib.inflate
 deflate = Promise.promisify zlib.deflate
 
 region = do
-  read: (filename, cb) ->
+  read: (filename) ->
     (data) <~ read-file(filename).then
     r = {chunks: {}, data}
     Promise.all(
